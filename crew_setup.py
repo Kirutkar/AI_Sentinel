@@ -1,31 +1,35 @@
-from crewai import Crew, Task
-from crew_agents import detection_agent, severity_agent, action_agent
+from crewai import Agent
+from crewai.llm import LLM
+from dotenv import load_dotenv
 
-# Define tasks with explicit names
-detection_task = Task(
-    description="Explain anomaly in 1–2 lines.",
-    agent=detection_agent,
-    expected_output="A short explanation (1–2 lines) why the anomaly was detected.",
-    name="Reason"
+load_dotenv()
+
+# Define the model properly
+openai_llm = LLM(model="gpt-4o-mini")  # ✅ creates LLM object
+
+# 1. Detection Explainer Agent
+detection_agent = Agent(
+    role="Detection Explainer",
+    goal="Explain anomalies briefly in logs.",
+    backstory="Expert in log analysis. Explains root causes in 1–2 lines.",
+    llm=openai_llm,   # ✅ pass LLM object, not string
+    verbose=True
 )
 
-severity_task = Task(
-    description="Classify anomaly severity into Critical, Major, or Minor.",
-    agent=severity_agent,
-    expected_output="One of: Critical, Major, Minor.",
-    name="Severity"
+# 2. Severity Classifier Agent
+severity_agent = Agent(
+    role="Severity Classifier",
+    goal="Label severity as Critical / Major / Minor.",
+    backstory="Cyber defense specialist. Uses error thresholds for severity.",
+    llm=openai_llm,
+    verbose=True
 )
 
-action_task = Task(
-    description="Suggest 1–2 practical actions for the ops team.",
-    agent=action_agent,
-    expected_output="1–2 short recommended actions.",
-    name="Suggested Action"
-)
-
-# Crew pipeline
-crew = Crew(
-    agents=[detection_agent, severity_agent, action_agent],
-    tasks=[detection_task, severity_task, action_task],
+# 3. Action Advisor Agent
+action_agent = Agent(
+    role="Action Advisor",
+    goal="Suggest 1–2 short practical actions for anomalies.",
+    backstory="System reliability engineer. Suggests clear next steps.",
+    llm=openai_llm,
     verbose=True
 )
