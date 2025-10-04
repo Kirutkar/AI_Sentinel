@@ -1,7 +1,7 @@
-from crewai import Agent
-from crewai.llm import LLM
+from crewai import Agent, LLM
 from dotenv import load_dotenv
 
+# Load .env for API key
 load_dotenv()
 
 # Define the model properly
@@ -12,7 +12,7 @@ detection_agent = Agent(
     role="Detection Explainer",
     goal="Explain anomalies briefly in logs.",
     backstory="Expert in log analysis. Explains root causes in 1–2 lines.",
-    llm=openai_llm,   # ✅ pass LLM object, not string
+    llm=openai_llm,
     verbose=True
 )
 
