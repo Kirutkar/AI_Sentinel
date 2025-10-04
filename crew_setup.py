@@ -1,5 +1,6 @@
 from crewai import Agent, LLM
 from dotenv import load_dotenv
+from crewai import Crew
 
 # Load .env for API key
 load_dotenv()
@@ -33,9 +34,26 @@ action_agent = Agent(
     llm=openai_llm,
     verbose=True
 )
-from crewai import Crew
+# Define tasks
+detection_task = Task(
+    agent=detection_agent,
+    description="Explain why the log entry was flagged as an anomaly.",
+    inputs={"block_id": "block_id", "error": "error", "sequence": "sequence"}
+)
+severity_task = Task(
+    agent=severity_agent,
+    description="Classify the severity for the anomaly.",
+    inputs={"error": "error"}
+)
+action_task = Task(
+    agent=action_agent,
+    description="Suggest actions the ops team should take for this anomaly.",
+    inputs={"block_id": "block_id", "error": "error", "sequence": "sequence"}
+)
+
+tasks = [detection_task, severity_task, action_task]
 
 crew = Crew(
-    agents=[detection_agent, severity_agent, action_agent]
-    # You can add more arguments if your pipeline needs them
+    agents=[detection_agent, severity_agent, action_agent],
+    tasks=tasks,
 )
