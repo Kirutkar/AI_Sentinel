@@ -33,3 +33,9 @@ action_agent = Agent(
     llm=openai_llm,
     verbose=True
 )
+from crewai import Crew
+
+crew = Crew(
+    agents=[detection_agent, severity_agent, action_agent]
+    # You can add more arguments if your pipeline needs them
+)
