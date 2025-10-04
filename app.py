@@ -4,20 +4,54 @@ import numpy as np
 from tensorflow.keras.models import load_model
 from crew_setup import crew
 
-# Load trained model
+# ===========================================
+# 🧠 Load Trained Autoencoder Model
+# ===========================================
 autoencoder = load_model("ai_sentinel_autoencoder.h5", compile=False)
 
-# Title
+# ===========================================
+# 🏷️ App Title
+# ===========================================
 st.title("🛡️ AI Sentinel - Log Anomaly Detector")
+st.caption("A multi-agent anomaly detection system with lightweight guardrails.")
 
-# File upload
+# ===========================================
+# 📂 File Upload Section
+# ===========================================
 uploaded_files = st.file_uploader(
     "Upload preprocessed log files (.csv)",
     type="csv",
     accept_multiple_files=True
 )
 
-# Function to map severity deterministically from reconstruction error
+# ===========================================
+# 🧩 Lightweight Guardrail & Validation Utils
+# ===========================================
+def clean_text(text: str) -> str:
+    """Minimal guardrail to trim irrelevant or unsafe outputs."""
+    if not isinstance(text, str):
+        return "Invalid model response."
+    # Keep natural reasoning flow but trim extreme or irrelevant outputs
+    blocked_terms = ["<html>", "</script>", "import ", "Traceback (most recent call)"]
+    if any(term.lower() in text.lower() for term in blocked_terms):
+        return "Response skipped due to invalid output."
+    # Trim overly long responses for clarity
+    return text.strip()[:800]
+
+def validate_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensures uploaded dataset is clean and numeric."""
+    if df.isnull().sum().sum() > 0:
+        st.warning("⚠️ Missing values detected — replaced with 0.")
+        df = df.fillna(0)
+    non_numeric = [col for col in df.columns if not np.issubdtype(df[col].dtype, np.number)]
+    if non_numeric:
+        st.warning(f"⚠️ Non-numeric columns detected and ignored: {non_numeric}")
+        df = df.select_dtypes(include=[np.number])
+    return df
+
+# ===========================================
+# 🚨 Severity Mapping Function
+# ===========================================
 def map_severity(error, threshold=20):
     if error > threshold * 2:
         return "Critical"
@@ -26,10 +60,15 @@ def map_severity(error, threshold=20):
     else:
         return "Minor"
 
+# ===========================================
+# 🚀 Main Execution
+# ===========================================
 if uploaded_files:
     dfs = [pd.read_csv(file) for file in uploaded_files]
     df = pd.concat(dfs, ignore_index=True)
-    st.write("✅ Uploaded Data Sample:", df.head())
+    df = validate_data(df)
+    st.write("✅ Uploaded Data Sample:")
+    st.dataframe(df.head())
 
     # Ensure BlockId exists
     if "BlockId" not in df.columns:
@@ -52,28 +91,25 @@ if uploaded_files:
     df["Severity"] = df["Reconstruction Error"].apply(lambda e: map_severity(e, threshold))
 
     # Summary
-    total_logs = len(df)
-    anomalies = (df["Prediction"] == "Anomaly").sum()
-    normals = (df["Prediction"] == "Normal").sum()
     st.subheader("📊 Summary")
-    st.write(f"**Total Logs:** {total_logs}")
-    st.write(f"**Anomalies:** {anomalies}")
-    st.write(f"**Normal Entries:** {normals}")
+    st.write(f"**Total Logs:** {len(df)}")
+    st.write(f"**Anomalies:** {(df['Prediction'] == 'Anomaly').sum()}")
+    st.write(f"**Normal Entries:** {(df['Prediction'] == 'Normal').sum()}")
 
     # Preview results
     st.subheader("🔎 Results Preview")
     st.dataframe(df.head(20))
 
-    # =====================
-    # 🚀 CrewAI Multi-Agent
-    # =====================
-    st.subheader("🤖 CrewAI Agent Pipeline")
-    anomaly_rows = df[df['Prediction'] == 'Anomaly']
+    # ===========================================
+    # 🤖 CrewAI Multi-Agent Section
+    # ===========================================
+    st.subheader("🧠 CrewAI Agent Reasoning")
+    anomaly_rows = df[df["Prediction"] == "Anomaly"]
 
     if not anomaly_rows.empty:
         explanations = []
 
-        # Pick one anomaly from each severity
+        # Pick one anomaly from each severity level
         for severity_level in ["Critical", "Major", "Minor"]:
             sample = anomaly_rows[anomaly_rows["Severity"] == severity_level].head(1)
 
@@ -83,21 +119,25 @@ if uploaded_files:
                 error = sample["Reconstruction Error"]
                 sequence = sample.drop(["Reconstruction Error", "Prediction", "Severity"]).tolist()
 
-                result = crew.kickoff(inputs={
-                    "block_id": str(block_id),
-                    "error": float(error),
-                    "sequence": [str(s) for s in sequence]
-                })
+                try:
+                    result = crew.kickoff(inputs={
+                        "block_id": str(block_id),
+                        "error": float(error),
+                        "sequence": [str(s) for s in sequence]
+                    })
 
-                # Default values
-                reason, action = "N/A", "N/A"
+                    reason, action = "N/A", "N/A"
 
-                if hasattr(result, "tasks_output") and result.tasks_output:
-                    outputs = result.tasks_output
-                    if len(outputs) > 0:
-                        reason = outputs[0].raw
-                    if len(outputs) > 2:
-                        action = outputs[2].raw
+                    if hasattr(result, "tasks_output") and result.tasks_output:
+                        outputs = result.tasks_output
+                        if len(outputs) > 0:
+                            reason = clean_text(outputs[0].raw)
+                        if len(outputs) > 2:
+                            action = clean_text(outputs[2].raw)
+
+                except Exception as e:
+                    reason = f"⚠️ CrewAI Error: {str(e)[:200]}"
+                    action = "N/A"
 
                 explanations.append({
                     "BlockId": block_id,
@@ -106,18 +146,22 @@ if uploaded_files:
                     "Suggested Action": action
                 })
 
-        # Convert to dataframe for display
+        # Display CrewAI results
         final_df = pd.DataFrame(explanations)
-        st.write("### 📝 One Example per Severity")
+        st.write("### 📝 Example Results (1 per Severity)")
         st.dataframe(final_df)
 
-        # (Optional) Expand to show all anomalies with severity assigned
         with st.expander("🔍 Full Anomaly List with Severity Buckets"):
             st.dataframe(anomaly_rows)
 
     else:
-        st.write("✅ No anomalies detected to analyze.")
+        st.success("✅ No anomalies detected to analyze.")
 
-    # Download results
+    # ===========================================
+    # 📥 Download Results
+    # ===========================================
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button("📥 Download Results", csv, "results.csv", "text/csv")
+
+else:
+    st.info("👆 Please upload one or more log CSV files to start the analysis.")
