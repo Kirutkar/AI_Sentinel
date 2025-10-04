@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from tensorflow.keras.models import load_model
-from crew_setup import crew
+from crew_setup import detection_agent, severity_agent, action_agent
 
 # Load trained model
 autoencoder = load_model("ai_sentinel_autoencoder.h5", compile=False)
