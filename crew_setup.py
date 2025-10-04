@@ -1,4 +1,4 @@
-from crewai import Agent, LLM
+from crewai import Agent, LLM, Task
 from dotenv import load_dotenv
 from crewai import Crew
 
