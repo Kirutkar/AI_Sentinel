@@ -38,17 +38,20 @@ action_agent = Agent(
 detection_task = Task(
     agent=detection_agent,
     description="Explain why the log entry was flagged as an anomaly.",
-    inputs={"block_id": "block_id", "error": "error", "sequence": "sequence"}
+    inputs={"block_id": "block_id", "error": "error", "sequence": "sequence"},
+    expected_output="A brief explanation (1-2 lines) of why this entry is anomalous."
 )
 severity_task = Task(
     agent=severity_agent,
     description="Classify the severity for the anomaly.",
-    inputs={"error": "error"}
+    inputs={"error": "error"},
+    expected_output="A severity label: Critical, Major, or Minor."
 )
 action_task = Task(
     agent=action_agent,
     description="Suggest actions the ops team should take for this anomaly.",
-    inputs={"block_id": "block_id", "error": "error", "sequence": "sequence"}
+    inputs={"block_id": "block_id", "error": "error", "sequence": "sequence"},
+    expected_output="1–2 short, practical actions for ops team."
 )
 
 tasks = [detection_task, severity_task, action_task]
